@@ -43,7 +43,7 @@ struct lenv {
 /* Function Prototypes */
 
 void lval_print(lval *v);
-lval *lval_eval(lenv* e, lval *v);
+lval *lval_eval(lenv *e, lval *v);
 lval *lval_take(lval *v, int i);
 lval *lval_pop(lval *v, int i);
 lval *builtin_op(lenv *e, lval *a, char *op);
@@ -54,15 +54,16 @@ lval *lval_err(char *m);
 lval *lval_sym(char *s);
 lval *lval_fun(lbuiltin func);
 
-lval *builtin_list(lenv* e, lval *a);
-lval *builtin_head(lenv* e, lval *a);
-lval* builtin_div(lenv* e, lval* a);
-lval* builtin_mul(lenv* e, lval* a);
-lval* builtin_sub(lenv* e, lval* a);
-lval* builtin_add(lenv* e, lval* a);
+lval *builtin_list(lenv *e, lval *a);
+lval *builtin_head(lenv *e, lval *a);
+lval *builtin_div(lenv *e, lval *a);
+lval *builtin_mul(lenv *e, lval *a);
+lval *builtin_sub(lenv *e, lval *a);
+lval *builtin_add(lenv *e, lval *a);
 lval *builtin_tail(lenv *e, lval *a);
-lval *builtin_eval(lenv* e, lval *a);
+lval *builtin_eval(lenv *e, lval *a);
 lval *builtin_join(lenv *e, lval *a);
+lval *builtin_def(lenv *e, lval *a);
 
 /* LENV */
 lenv *lenv_new(void) {
@@ -99,6 +100,7 @@ void lenv_put(lenv *e, lval *k, lval *v) {
     if (strcmp(e->syms[i], k->sym) == 0) {
       lval_del(e->vals[i]);
       e->vals[i] = lval_copy(v);
+      return;
     }
   }
 
@@ -112,20 +114,21 @@ void lenv_put(lenv *e, lval *k, lval *v) {
   strcpy(e->syms[e->count - 1], k->sym);
 }
 
-void lenv_add_builtin(lenv* e, char*name, lbuiltin func) {
-  lval* k = lval_sym(name);
-  lval* v = lval_fun(func);
+void lenv_add_builtin(lenv *e, char *name, lbuiltin func) {
+  lval *k = lval_sym(name);
+  lval *v = lval_fun(func);
   lenv_put(e, k, v);
   lval_del(k);
   lval_del(v);
 }
 
-void lenv_add_builtins(lenv* e) {
+void lenv_add_builtins(lenv *e) {
   lenv_add_builtin(e, "list", builtin_list);
   lenv_add_builtin(e, "head", builtin_head);
   lenv_add_builtin(e, "tail", builtin_tail);
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "join", builtin_join);
+  lenv_add_builtin(e, "def", builtin_def);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -151,7 +154,8 @@ lval *lval_copy(lval *v) {
     x->fun = v->fun;
     break;
   case LVAL_NUM:
-    x->num = x->num;
+    x->num = v->num;
+    break;
   case LVAL_ERR:
     x->err = malloc(strlen(v->err) + 1);
     strcpy(x->err, v->err);
@@ -335,7 +339,7 @@ void lval_println(lval *v) {
   putchar('\n');
 }
 
-lval *lval_eval_sexpr(lenv* e, lval *v) {
+lval *lval_eval_sexpr(lenv *e, lval *v) {
   /* evaluate children */
   for (int i = 0; i < v->count; i++) {
     v->cell[i] = lval_eval(e, v->cell[i]);
@@ -372,9 +376,9 @@ lval *lval_eval_sexpr(lenv* e, lval *v) {
   return result;
 }
 
-lval *lval_eval(lenv* e, lval *v) {
-  if(v->type == LVAL_SYM) {
-    lval* x = lenv_get(e, v);
+lval *lval_eval(lenv *e, lval *v) {
+  if (v->type == LVAL_SYM) {
+    lval *x = lenv_get(e, v);
     lval_del(x);
     return x;
   }
@@ -457,23 +461,15 @@ lval *builtin_op(lenv *e, lval *a, char *op) {
   return x;
 }
 
-lval* builtin_add(lenv* e, lval* a) {
-  return builtin_op(e, a, "+");
-}
+lval *builtin_add(lenv *e, lval *a) { return builtin_op(e, a, "+"); }
 
-lval* builtin_sub(lenv* e, lval* a) {
-  return builtin_op(e, a, "-");
-}
+lval *builtin_sub(lenv *e, lval *a) { return builtin_op(e, a, "-"); }
 
-lval* builtin_mul(lenv* e, lval* a) {
-  return builtin_op(e, a, "*");
-}
+lval *builtin_mul(lenv *e, lval *a) { return builtin_op(e, a, "*"); }
 
-lval* builtin_div(lenv* e, lval* a) {
-  return builtin_op(e, a, "/");
-}
+lval *builtin_div(lenv *e, lval *a) { return builtin_op(e, a, "/"); }
 
-lval *builtin_head(lenv* e, lval *a) {
+lval *builtin_head(lenv *e, lval *a) {
   LASSERT(a, a->count == 1, "Function 'head' passed too many arguments !");
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
           "Function 'head' passed incorrect type !");
@@ -497,12 +493,12 @@ lval *builtin_tail(lenv *e, lval *a) {
   return v;
 }
 
-lval *builtin_list(lenv* e, lval *a) {
+lval *builtin_list(lenv *e, lval *a) {
   a->type = LVAL_QEXPR;
   return a;
 }
 
-lval *builtin_eval(lenv* e, lval *a) {
+lval *builtin_eval(lenv *e, lval *a) {
   LASSERT(a, a->count == 1, "Function 'eval' passed too many arguments !");
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
           "Function 'eval' passed incorrect type !");
@@ -519,6 +515,31 @@ lval *lval_join(lval *x, lval *y) {
 
   lval_del(y);
   return x;
+}
+
+lval *builtin_def(lenv *e, lval *a) {
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+          "Function 'def' passed incorrect type !");
+
+  lval *syms = a->cell[0];
+
+  /* first arg  is symbol list */
+  for (int i = 0; i < syms->count; i++) {
+    LASSERT(a, syms->cell[i]->type == LVAL_SYM,
+            "Function 'def' cannot define non symbols");
+  }
+
+  /* check correct number of symbols and values */
+  LASSERT(a, syms->count == a->count - 1,
+          "Function 'def' symbols and values don't match");
+
+  /* assigns copies of symbols to values */
+  for (int i = 0; i < syms->count; i++) {
+    lenv_put(e, syms->cell[i], a->cell[i + 1]);
+  }
+
+  lval_del(a);
+  return lval_sexpr();
 }
 
 lval *builtin_join(lenv *e, lval *a) {
