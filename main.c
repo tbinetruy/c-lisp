@@ -37,7 +37,7 @@ typedef struct lval lval;
 typedef struct lenv lenv;
 
 /* Lisp Value */
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN };
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN, LVAL_STR };
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
 typedef lval *(*lbuiltin)(lenv *, lval *);
@@ -49,6 +49,7 @@ typedef struct lval {
   long num;
   char *err;
   char *sym;
+  char *str;
 
   /* function */
   lbuiltin builtin;
@@ -306,6 +307,17 @@ lval *lval_lambda(lval *formals, lval *body) {
   return v;
 }
 
+
+lval *lval_str(char* s) {
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_STR;
+  v->str = malloc(strlen(s) + 1);
+  strcpy(v->str, s);
+
+  return v;
+}
+
+
 char *ltype_name(int t) {
   switch (t) {
   case LVAL_FUN:
@@ -320,6 +332,8 @@ char *ltype_name(int t) {
     return "S-Expression";
   case LVAL_QEXPR:
     return "Q-Expression";
+  case LVAL_STR:
+    return "String";
   default:
     return "Unknown";
   }
@@ -435,6 +449,9 @@ void lval_del(lval *v) {
     break;
   case LVAL_NUM:
     break;
+  case LVAL_STR:
+    free(v->str);
+    break;
   case LVAL_ERR:
     free(v->err);
     break;
@@ -468,6 +485,17 @@ lval *lval_add(lval *v, lval *x) {
   return v;
 }
 
+lval *lval_read_str(mpc_ast_t* t) {
+  t->contents[strlen(t->contents) - 1] = '\0';
+  char* unescaped = malloc(strlen(t->contents + 1) + 1);
+  strcpy(unescaped, t->contents + 1);
+  unescaped = mpcf_unescape(unescaped);
+  lval* str = lval_str(unescaped);
+
+  free(unescaped);
+  return str;
+}
+
 lval *lval_read(mpc_ast_t *t) {
   /* if number or symbol return conversion to that type */
   if (strstr(t->tag, "number")) {
@@ -475,6 +503,9 @@ lval *lval_read(mpc_ast_t *t) {
   }
   if (strstr(t->tag, "symbol")) {
     return lval_sym(t->contents);
+  }
+  if(strstr(t->tag, "string")) {
+    return lval_read_str(t);
   }
 
   /* if root (>) or sexpr then create empty list */
@@ -526,6 +557,15 @@ void lval_expr_print(lval *v, char open, char close) {
   putchar(close);
 }
 
+void lval_print_str(lval *v) {
+  char* escaped = malloc(strlen(v->str) + 1);
+  strcpy(escaped, v->str);
+  escaped = mpcf_escape(escaped);
+  printf("'%s'", escaped);
+
+  free(escaped);
+}
+
 void lval_print(lval *v) {
   switch (v->type) {
   case LVAL_FUN:
@@ -541,6 +581,9 @@ void lval_print(lval *v) {
     break;
   case LVAL_NUM:
     printf("%li", v->num);
+    break;
+  case LVAL_STR:
+    lval_print_str(v);
     break;
   case LVAL_ERR:
     printf("Error: %s", v->err);
@@ -650,6 +693,8 @@ int lval_eq(lval *x, lval *y) {
     return (strcmp(x->err, y->err) == 0);
   case LVAL_SYM:
     return (strcmp(x->sym, y->sym) == 0);
+  case LVAL_STR:
+    return (strcmp(x->str, y->str) == 0);
   case LVAL_FUN:
     if (x->builtin || y->builtin) {
       return x->builtin == y->builtin;
@@ -925,16 +970,19 @@ int main(int argc, char **argv) {
   mpc_parser_t *Qexpr = mpc_new("qexpr");
   mpc_parser_t *Expr = mpc_new("expr");
   mpc_parser_t *Lispy = mpc_new("lispy");
+  mpc_parser_t *String = mpc_new("string");
 
   mpca_lang(MPCA_LANG_DEFAULT, "                           \
     number   : /-?[0-9]+/ ;                                \
     symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;          \
+    string   : /\"(\\\\.|[^\"])*\"/ ;                      \
     sexpr    : '(' <expr>* ')' ;                           \
     qexpr    : '{' <expr>* '}' ;                           \
-    expr     : <number> | <symbol> | <sexpr> | <qexpr> ;   \
+    expr     : <number> | <symbol> | <sexpr> | <qexpr> |   \
+               <string>;                                   \
     lispy    : /^/ <expr>* /$/ ;                           \
   ",
-            Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
+            Number, Symbol, String, Sexpr, Qexpr, Expr, Lispy);
 
   puts("Lispy Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
@@ -968,7 +1016,7 @@ int main(int argc, char **argv) {
   lenv_del(e);
 
   /* Undefine and Delete our Parsers */
-  mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Lispy);
+  mpc_cleanup(7, Number, Symbol, String, Sexpr, Qexpr, Expr, Lispy);
 
   return 0;
 }
