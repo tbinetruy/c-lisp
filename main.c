@@ -236,6 +236,22 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
     }
 
     lval *sym = lval_pop(f->formals, 0);
+
+    if (strcmp(sym->sym, "&") == 0) {
+      /* ensure & is followed by another symbol */
+      if (f->formals->count != 1) {
+        lval_del(a);
+        return lval_err("Function format is invalid."
+                        "Symbol '&' not followed by single symbol.");
+      }
+
+      /* next formal should be bound to remaining arguments */
+      lval* nsym = lval_pop(f->formals, 0);
+      lenv_put(f->env, nsym, builtin_list(e, a));
+      lval_del(sym); lval_del(nsym);
+      break;
+    }
+
     lval *val = lval_pop(a, 0);
     lenv_put(f->env, sym, val);
 
@@ -244,6 +260,14 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
   }
 
   lval_del(a);
+
+  if(f->formals->count > 0 &&
+     strcmp(f->formals->cell[0]->sym, "&")) {
+    if(f->formals->count != 2) {
+      return lval_err("Function format invalid"
+                      "Symbol '&' not followed by single symbol.");
+    }
+  }
 
   /* if all formals have been bound, evaluate */
   if (f->formals->count == 0) {
@@ -307,7 +331,8 @@ lval *lval_copy(lval *v) {
       x->body = lval_copy(v->body);
     }
     break;
-  case LVAL_SYM: x->sym = malloc(strlen(v->sym) + 1);
+  case LVAL_SYM:
+    x->sym = malloc(strlen(v->sym) + 1);
     strcpy(x->sym, v->sym);
     break;
   case LVAL_NUM:
