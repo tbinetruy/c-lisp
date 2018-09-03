@@ -505,9 +505,10 @@ lval *builtin_head(lenv *e, lval *a) {
 }
 
 lval *builtin_tail(lenv *e, lval *a) {
-  LASSERT(a, a->count == 1, "Function 'tail' passed too many arguments !");
+  LASSERT(a, a->count == 1, "Function 'tail' passed too many arguments ! Got %i, expected %i", a->count, 1);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-          "Function 'tail' passed incorrect type !");
+          "Function 'tail' passed incorrect type for argument 0. Got %s, expected %s.",
+          ltype_name(a->cell[0]->type), ltype_name(LVAL_QEXPR));
   LASSERT(a, a->cell[0]->count != 0, "Function 'tail' passed {} !");
 
   lval *v = lval_take(a, 0);
@@ -521,9 +522,10 @@ lval *builtin_list(lenv *e, lval *a) {
 }
 
 lval *builtin_eval(lenv *e, lval *a) {
-  LASSERT(a, a->count == 1, "Function 'eval' passed too many arguments !");
+  LASSERT(a, a->count == 1, "Function 'eval' passed too many arguments ! Got %i, expected %i", a->count, 1);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-          "Function 'eval' passed incorrect type !");
+          "Function 'eval' passed incorrect type for argument 0. Got %s, expected %s.",
+          ltype_name(a->cell[0]->type), ltype_name(LVAL_QEXPR));
 
   lval *x = lval_take(a, 0);
   x->type = LVAL_SEXPR;
@@ -541,7 +543,8 @@ lval *lval_join(lval *x, lval *y) {
 
 lval *builtin_def(lenv *e, lval *a) {
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-          "Function 'def' passed incorrect type !");
+          "Function 'def' passed incorrect type for argument 0. Got %s, expected %s.",
+          ltype_name(a->cell[0]->type), ltype_name(LVAL_QEXPR));
 
   lval *syms = a->cell[0];
 
@@ -567,7 +570,8 @@ lval *builtin_def(lenv *e, lval *a) {
 lval *builtin_join(lenv *e, lval *a) {
   for (int i = 0; i < a->count; i++) {
     LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-            "Function 'join' passed incorrect type !");
+            "Function 'join' passed incorrect type for argument %i. Got %s, expected %s.",
+            i, ltype_name(a->cell[i]->type), ltype_name(LVAL_QEXPR));
   }
 
   lval *x = lval_pop(a, 0);
