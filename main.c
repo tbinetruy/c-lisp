@@ -3,11 +3,11 @@
 #include <stdlib.h>
 
 #include "mpc.h"
-
-#define LASSERT(args, cond, err)                                               \
-  if (!(cond)) {                                                               \
-    lval_del(args);                                                            \
-    return lval_err(err);                                                      \
+#define LASSERT(args, cond, fmt, ...)           \
+  if (!(cond)) {                                \
+    lval* err = lval_err(fmt, ##__VA_ARGS__);   \
+    lval_del(args);                             \
+    return err;                                 \
   }
 
 /* Forward Declarations */
@@ -50,7 +50,7 @@ lval *builtin_op(lenv *e, lval *a, char *op);
 lval *builtin(lenv *e, lval *a, char *func);
 void lval_del(lval *v);
 lval *lval_copy(lval *v);
-lval *lval_err(char *m);
+lval *lval_err(char *fmt, ...);
 lval *lval_sym(char *s);
 lval *lval_fun(lbuiltin func);
 
@@ -92,7 +92,7 @@ lval *lenv_get(lenv *e, lval *k) {
   }
 
   /* if no symbol found */
-  return lval_err("unbound symbol !");
+  return lval_err("unbound symbol '%s'", k->sym);
 }
 
 void lenv_put(lenv *e, lval *k, lval *v) {
@@ -137,6 +137,17 @@ void lenv_add_builtins(lenv *e) {
 }
 
 /* LVAL */
+char* ltype_name(int t) {
+  switch(t) {
+  case LVAL_FUN: return "Function";
+  case LVAL_NUM: return "Number";
+  case LVAL_ERR: return "Error";
+  case LVAL_SYM: return "Symbol";
+  case LVAL_SEXPR: return "S-Expression";
+  case LVAL_QEXPR: return "Q-Expression";
+  default: return "Unknown";
+  }
+}
 
 lval *lval_fun(lbuiltin func) {
   lval *v = malloc(sizeof(lval));
@@ -182,11 +193,21 @@ lval *lval_num(long x) {
 }
 
 /* Create a new error type lval */
-lval *lval_err(char *m) {
+lval *lval_err(char *fmt, ...) {
   lval *v = malloc(sizeof(lval));
   v->type = LVAL_ERR;
-  v->err = malloc(strlen(m) + 1);
-  strcpy(v->err, m);
+
+  va_list va;
+  va_start(va, fmt);
+
+  v->err = malloc(512);
+
+  vsnprintf(v->err, 511, fmt, va);
+
+  v->err = realloc(v->err, strlen(v->err) + 1);
+
+  va_end(va);
+
   return v;
 }
 
@@ -470,9 +491,10 @@ lval *builtin_mul(lenv *e, lval *a) { return builtin_op(e, a, "*"); }
 lval *builtin_div(lenv *e, lval *a) { return builtin_op(e, a, "/"); }
 
 lval *builtin_head(lenv *e, lval *a) {
-  LASSERT(a, a->count == 1, "Function 'head' passed too many arguments !");
+  LASSERT(a, a->count == 1, "Function 'head' passed too many arguments ! Got %i, expected %i", a->count, 1);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-          "Function 'head' passed incorrect type !");
+          "Function 'head' passed incorrect type for argument 0. Got %s, expected %s.",
+          ltype_name(a->cell[0]->type), ltype_name(LVAL_QEXPR));
   LASSERT(a, a->cell[0]->count != 0, "Function 'head' passed {} !");
 
   lval *v = lval_take(a, 0);
