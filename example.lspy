@@ -1,4 +1,13 @@
-(def {fun} (\ {args body} {def (head args) (\ (tail args) body)}))
-(fun {+1 a} {+ a 1})
+;;; This is a test file
 
-(print (+1 5))
+(def {fun} (\ {args body} {def (head args) (\ (tail args) body)}))
+
+(fun {fst l} { eval (head l) })
+(fun {snd l} { eval (head (tail l)) })
+(fun {trd l} { eval (head (tail (tail l))) })
+
+(def {nil} {})
+
+(fun {unpack f l} { eval (join (list f) l) })
+
+; (fun {select2 & cs} { if (== cs nil) {error "No Selection Found"} {if (fst (fst cs)) {snd (fst cs)} {unpack select (tail cs)}}})
